@@ -252,6 +252,64 @@ async function checkBirthdayTrigger(settings, stats) {
   for (const p of birthdays) await processCandidate(p, 'birthday', settings, template, stats, 'birthday');
 }
 
+async function checkDNATrigger(settings, stats) {
+  console.log('\n── DNA Trigger ──');
+  const template = await getTemplate('dna');
+  if (!template) { console.log('  Inactive — skipping'); return; }
+
+  const now = new Date();
+  const windowStart = new Date(now - 48 * 60 * 60 * 1000).toISOString(); // 48hrs ago
+  const windowEnd   = new Date(now - 20 * 60 * 60 * 1000).toISOString(); // 20hrs ago
+
+  // Find appointments marked as DNA in the 20-48hr window
+  const appts = await sbGet('appointments',
+    `is_dna=eq.true&starts_at=gte.${windowStart}&starts_at=lte.${windowEnd}&select=patient_id,starts_at`);
+
+  if (!appts || appts.length === 0) { console.log('  No DNA appointments in window'); return; }
+
+  const patientIds = [...new Set(appts.map(a => a.patient_id))];
+  console.log(`  ${patientIds.length} candidate(s)`);
+
+  const patients = await sbGet('patients', `id=in.(${patientIds.join(',')})&select=id,first_name,last_name,email,phone`);
+
+  for (const patient of patients) {
+    await processCandidate(patient, 'dna', settings, template, stats, 'DNA');
+  }
+}
+
+async function checkCancelledNoRebookTrigger(settings, stats) {
+  console.log('\n── Cancelled No Rebook Trigger ──');
+  const template = await getTemplate('cancelled_no_rebook');
+  if (!template) { console.log('  Inactive — skipping'); return; }
+
+  const now = new Date();
+  const windowStart = new Date(now - 48 * 60 * 60 * 1000).toISOString();
+  const windowEnd   = new Date(now - 20 * 60 * 60 * 1000).toISOString();
+
+  // Find appointments cancelled in the 20-48hr window
+  const appts = await sbGet('appointments',
+    `is_cancelled=eq.true&cancelled_at=gte.${windowStart}&cancelled_at=lte.${windowEnd}&select=patient_id,cancelled_at`);
+
+  if (!appts || appts.length === 0) { console.log('  No cancellations in window'); return; }
+
+  const patientIds = [...new Set(appts.map(a => a.patient_id))];
+  console.log(`  ${patientIds.length} cancellation(s) — checking for rebooking...`);
+
+  const patients = await sbGet('patients', `id=in.(${patientIds.join(',')})&select=id,first_name,last_name,email,phone`);
+
+  for (const patient of patients) {
+    // Check if they have booked a future appointment since cancelling
+    const futureAppts = await sbGet('appointments',
+      `patient_id=eq.${patient.id}&is_cancelled=eq.false&starts_at=gt.${now.toISOString()}&select=id&limit=1`);
+    if (futureAppts && futureAppts.length > 0) {
+      console.log(`    ${patient.first_name} ${patient.last_name} — skipped (has future booking)`);
+      stats.skipped++;
+      continue;
+    }
+    await processCandidate(patient, 'cancelled_no_rebook', settings, template, stats, 'cancelled no rebook');
+  }
+}
+
 async function main() {
   console.log('============================================================');
   console.log('BEP Comms — Queue Builder — ' + new Date().toISOString());
@@ -261,6 +319,8 @@ async function main() {
   try { await checkReviewTriggers(settings, stats); } catch(e) { console.error('Review error:', e.message); stats.errors++; }
   try { await checkReactivationTriggers(settings, stats); } catch(e) { console.error('Reactivation error:', e.message); stats.errors++; }
   try { await checkBirthdayTrigger(settings, stats); } catch(e) { console.error('Birthday error:', e.message); stats.errors++; }
+  try { await checkDNATrigger(settings, stats); } catch(e) { console.error('DNA error:', e.message); stats.errors++; }
+  try { await checkCancelledNoRebookTrigger(settings, stats); } catch(e) { console.error('Cancelled no rebook error:', e.message); stats.errors++; }
   console.log('\n============================================================');
   console.log(`Done — Queued: ${stats.queued} | Skipped: ${stats.skipped} | Errors: ${stats.errors}`);
   console.log('============================================================');
