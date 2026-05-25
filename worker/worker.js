@@ -323,9 +323,22 @@ async function route(request, env, cors) {
 
   // ── QUEUE ─────────────────────────────────────────────────
   if (action === 'get_queue') {
-    const res = await sb(env, 'pending_queue', 'select=*&order=queued_at.asc');
+    const res = await sb(env, 'message_queue',
+      'select=id,patient_id,patient_name,patient_email,patient_phone,trigger_key,sms_body,email_subject,email_body,queued_at&status=eq.pending&order=queued_at.asc');
     if (!res.ok) throw new Error('Supabase error ' + res.status);
-    return json({ queue: await res.json() }, 200, cors);
+    const rows = await res.json();
+    // Add trigger_label manually
+    const labelMap = {
+      review_1st: 'Review Request — 1st Appointment',
+      review_5th: 'Review Request — 5th Appointment',
+      review_20th: 'Review Request — 20th Appointment',
+      reactivation_3m: 'Re-activation — 3 Months Inactive',
+      reactivation_6m: 'Re-activation — 6 Months Inactive',
+      reactivation_12m: 'Re-activation — 12 Months Inactive',
+      birthday: 'Birthday Message',
+    };
+    const queue = rows.map(r => ({ ...r, trigger_label: labelMap[r.trigger_key] || r.trigger_key }));
+    return json({ queue }, 200, cors);
   }
 
   if (action === 'approve') {
@@ -435,9 +448,19 @@ async function route(request, env, cors) {
 
   // ── SEND HISTORY ──────────────────────────────────────────
   if (action === 'get_log') {
-    const res = await sb(env, 'send_history', 'select=*&limit=200');
+    const res = await sb(env, 'message_queue', 'select=patient_name,patient_id,trigger_key,sent_at,status,notes&status=in.(sent,failed,skipped)&order=sent_at.desc&limit=200');
     if (!res.ok) throw new Error('Supabase error ' + res.status);
-    return json({ log: await res.json() }, 200, cors);
+    const labelMap = {
+      review_1st: 'Review Request — 1st Appointment',
+      review_5th: 'Review Request — 5th Appointment',
+      review_20th: 'Review Request — 20th Appointment',
+      reactivation_3m: 'Re-activation — 3 Months Inactive',
+      reactivation_6m: 'Re-activation — 6 Months Inactive',
+      reactivation_12m: 'Re-activation — 12 Months Inactive',
+      birthday: 'Birthday Message',
+    };
+    const logRows = await res.json();
+    return json({ log: logRows.map(r => ({ ...r, trigger_label: labelMap[r.trigger_key] || r.trigger_key })) }, 200, cors);
   }
 
   // ── RATINGS ───────────────────────────────────────────────
@@ -449,7 +472,7 @@ async function route(request, env, cors) {
 
   // ── INBOX ─────────────────────────────────────────────────
   if (action === 'get_inbox') {
-    const res = await sb(env, 'inbox', 'select=*');
+    const res = await sb(env, 'conversations', 'select=*&order=last_message_at.desc.nullslast');
     if (!res.ok) throw new Error('Supabase error ' + res.status);
     return json({ conversations: await res.json() }, 200, cors);
   }
