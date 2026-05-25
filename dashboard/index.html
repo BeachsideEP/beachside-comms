@@ -764,11 +764,11 @@ async function loadRatings() {
 
   document.getElementById('ratings-content').innerHTML = `
     <table>
-      <thead><tr><th>Patient ID</th><th>Trigger</th><th>Score</th><th>Feedback</th><th>Google</th><th>Date</th></tr></thead>
-      <tbody>
+      <thead><tr><th>Patient</th><th>Trigger</th><th>Score</th><th>Feedback</th><th>Google</th><th>Date</th></tr></thead>
+        <tbody>
         ${ratings.map(r => `
           <tr>
-            <td>${r.patient_id}</td>
+            <td>${escHtml(r.patient_name || 'Unknown')}</td>
             <td>${escHtml(r.trigger_key)}</td>
             <td class="${scoreClass(r.score)}">${r.score}/10</td>
             <td style="font-size:13px;max-width:300px">${escHtml(r.feedback || '—')}</td>
