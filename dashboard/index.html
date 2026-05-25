@@ -1,1 +1,826 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BEP Comms</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
 
+:root {
+  --bg: #f1f5f9;
+  --surface: #ffffff;
+  --border: #e2e8f0;
+  --primary: #0ea5e9;
+  --primary-dark: #0284c7;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --text: #0f172a;
+  --muted: #64748b;
+  --light: #94a3b8;
+  --sidebar: #0f172a;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+}
+
+/* ── LOGIN ─────────────────────────────── */
+#login-screen {
+  position: fixed; inset: 0;
+  background: var(--bg);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1000;
+}
+.login-card {
+  background: var(--surface);
+  border-radius: 16px;
+  padding: 48px 40px;
+  width: 380px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+}
+.login-card h1 { font-size: 22px; margin-bottom: 6px; }
+.login-card p { color: var(--muted); font-size: 14px; margin-bottom: 32px; }
+.form-group { margin-bottom: 16px; }
+.form-group label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+.form-group input { width: 100%; padding: 10px 14px; border: 2px solid var(--border); border-radius: 8px; font-size: 15px; outline: none; transition: border-color 0.15s; }
+.form-group input:focus { border-color: var(--primary); }
+.btn-primary { width: 100%; padding: 12px; background: var(--primary); color: #fff; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 8px; }
+.btn-primary:hover { background: var(--primary-dark); }
+.login-error { color: var(--danger); font-size: 13px; margin-top: 10px; text-align: center; }
+
+/* ── LAYOUT ─────────────────────────────── */
+#app { display: none; width: 100%; height: 100vh; }
+#app.visible { display: flex; }
+
+.sidebar {
+  width: 220px; min-width: 220px;
+  background: var(--sidebar);
+  display: flex; flex-direction: column;
+  padding: 24px 0;
+}
+.sidebar-brand {
+  padding: 0 20px 24px;
+  font-size: 13px; font-weight: 700;
+  color: #fff; letter-spacing: 0.5px;
+  text-transform: uppercase;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  margin-bottom: 16px;
+}
+.sidebar-brand span { display: block; font-size: 10px; color: rgba(255,255,255,0.4); font-weight: 400; margin-top: 2px; text-transform: uppercase; }
+.nav-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 20px;
+  font-size: 14px; font-weight: 500;
+  color: rgba(255,255,255,0.55);
+  cursor: pointer;
+  border-left: 3px solid transparent;
+  transition: all 0.15s;
+  user-select: none;
+}
+.nav-item:hover { color: #fff; background: rgba(255,255,255,0.05); }
+.nav-item.active { color: #fff; border-left-color: var(--primary); background: rgba(14,165,233,0.1); }
+.nav-item .badge {
+  margin-left: auto; background: var(--danger);
+  color: #fff; font-size: 11px; font-weight: 700;
+  padding: 2px 7px; border-radius: 10px; min-width: 20px; text-align: center;
+}
+.nav-icon { font-size: 16px; width: 20px; text-align: center; }
+.sidebar-bottom { margin-top: auto; padding: 16px 20px; }
+.logout-btn { width: 100%; padding: 8px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: rgba(255,255,255,0.5); font-size: 13px; cursor: pointer; }
+.logout-btn:hover { color: #fff; }
+
+.main { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+
+.topbar {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 16px 28px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.topbar h2 { font-size: 18px; font-weight: 700; }
+.topbar-actions { display: flex; gap: 10px; align-items: center; }
+
+.content { flex: 1; overflow-y: auto; padding: 28px; }
+
+/* ── PANELS ─────────────────────────────── */
+.panel { display: none; }
+.panel.active { display: block; }
+
+/* ── CARDS / TABLES ─────────────────────── */
+.card { background: var(--surface); border-radius: 12px; border: 1px solid var(--border); overflow: hidden; }
+.card-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+.card-header h3 { font-size: 15px; font-weight: 600; }
+.card-body { padding: 20px; }
+
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; padding: 10px 16px; background: #f8fafc; border-bottom: 1px solid var(--border); }
+td { padding: 12px 16px; font-size: 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: #f8fafc; }
+
+.badge-pill { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+.badge-review { background: #eff6ff; color: #3b82f6; }
+.badge-reactivation { background: #fef3c7; color: #d97706; }
+.badge-birthday { background: #fce7f3; color: #db2777; }
+
+/* ── BUTTONS ────────────────────────────── */
+.btn { padding: 7px 14px; border-radius: 7px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; transition: all 0.15s; }
+.btn-approve { background: #d1fae5; color: #065f46; }
+.btn-approve:hover { background: #10b981; color: #fff; }
+.btn-skip { background: #f1f5f9; color: var(--muted); }
+.btn-skip:hover { background: #e2e8f0; }
+.btn-sm { padding: 5px 12px; font-size: 12px; }
+.btn-send { background: var(--primary); color: #fff; }
+.btn-send:hover { background: var(--primary-dark); }
+.btn-refresh { background: var(--surface); border: 1px solid var(--border); color: var(--muted); padding: 7px 14px; border-radius: 7px; font-size: 13px; font-weight: 500; cursor: pointer; }
+.btn-refresh:hover { border-color: var(--primary); color: var(--primary); }
+
+/* ── QUEUE ──────────────────────────────── */
+.queue-empty { text-align: center; padding: 60px 20px; color: var(--muted); }
+.queue-empty .icon { font-size: 48px; margin-bottom: 16px; }
+.queue-empty p { font-size: 15px; }
+
+.preview-sms { background: #f0f9ff; border-left: 3px solid var(--primary); padding: 10px 14px; border-radius: 0 8px 8px 0; font-size: 13px; color: #334155; margin: 4px 0 8px; line-height: 1.5; }
+.preview-email-subject { font-size: 12px; color: var(--muted); margin-bottom: 2px; }
+
+/* ── INBOX ──────────────────────────────── */
+.inbox-layout { display: flex; gap: 20px; height: calc(100vh - 160px); }
+.conversation-list { width: 300px; min-width: 300px; background: var(--surface); border-radius: 12px; border: 1px solid var(--border); overflow-y: auto; }
+.conv-item { padding: 14px 16px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.1s; }
+.conv-item:hover { background: #f8fafc; }
+.conv-item.active { background: #f0f9ff; }
+.conv-item.unread .conv-name { font-weight: 700; }
+.conv-name { font-size: 14px; font-weight: 500; color: var(--text); margin-bottom: 3px; display: flex; align-items: center; gap: 8px; }
+.conv-preview { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.conv-time { font-size: 11px; color: var(--light); margin-left: auto; }
+.unread-dot { width: 8px; height: 8px; background: var(--primary); border-radius: 50%; flex-shrink: 0; }
+
+.chat-panel { flex: 1; background: var(--surface); border-radius: 12px; border: 1px solid var(--border); display: flex; flex-direction: column; }
+.chat-header { padding: 16px 20px; border-bottom: 1px solid var(--border); }
+.chat-header h3 { font-size: 15px; font-weight: 600; }
+.chat-header p { font-size: 13px; color: var(--muted); }
+.chat-messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+.chat-empty { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 14px; }
+
+.msg-bubble { max-width: 70%; }
+.msg-bubble.outbound { align-self: flex-end; }
+.msg-bubble.inbound { align-self: flex-start; }
+.msg-content { padding: 10px 14px; border-radius: 12px; font-size: 14px; line-height: 1.5; }
+.msg-bubble.outbound .msg-content { background: var(--primary); color: #fff; border-bottom-right-radius: 4px; }
+.msg-bubble.inbound .msg-content { background: #f1f5f9; color: var(--text); border-bottom-left-radius: 4px; }
+.msg-meta { font-size: 11px; color: var(--light); margin-top: 4px; }
+.msg-bubble.outbound .msg-meta { text-align: right; }
+.msg-channel { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; text-transform: uppercase; margin-right: 4px; }
+.msg-channel.sms { background: #dbeafe; color: #1d4ed8; }
+.msg-channel.email { background: #fce7f3; color: #9d174d; }
+
+.reply-area { padding: 16px 20px; border-top: 1px solid var(--border); }
+.reply-controls { display: flex; gap: 8px; margin-bottom: 10px; }
+.channel-toggle { padding: 5px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; border: 2px solid var(--border); background: var(--surface); color: var(--muted); transition: all 0.15s; }
+.channel-toggle.active { border-color: var(--primary); color: var(--primary); background: #f0f9ff; }
+.reply-subject { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 7px; font-size: 13px; margin-bottom: 8px; outline: none; font-family: inherit; }
+.reply-subject:focus { border-color: var(--primary); }
+.reply-row { display: flex; gap: 8px; }
+.reply-input { flex: 1; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; resize: none; font-family: inherit; outline: none; min-height: 60px; }
+.reply-input:focus { border-color: var(--primary); }
+
+/* ── TEMPLATES ──────────────────────────── */
+.template-grid { display: grid; gap: 20px; }
+.template-card { background: var(--surface); border-radius: 12px; border: 1px solid var(--border); overflow: hidden; }
+.template-header { padding: 14px 20px; background: #f8fafc; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+.template-header h4 { font-size: 14px; font-weight: 600; }
+.template-body { padding: 20px; display: grid; gap: 14px; }
+.template-field label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 6px; }
+.template-field textarea, .template-field input { width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: 7px; font-size: 13px; font-family: inherit; outline: none; resize: vertical; line-height: 1.5; }
+.template-field textarea:focus, .template-field input:focus { border-color: var(--primary); }
+.template-actions { padding: 12px 20px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 8px; }
+.toggle-active { display: flex; align-items: center; gap: 8px; }
+.toggle-active input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--primary); }
+.toggle-active label { font-size: 13px; color: var(--muted); }
+.save-indicator { font-size: 12px; color: var(--success); }
+
+/* ── LOG / RATINGS ──────────────────────── */
+.stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+.stat-card { background: var(--surface); border-radius: 12px; border: 1px solid var(--border); padding: 20px; }
+.stat-card .label { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 8px; }
+.stat-card .value { font-size: 28px; font-weight: 700; color: var(--text); }
+.stat-card .sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+.status-sent { color: var(--success); font-weight: 600; }
+.status-failed { color: var(--danger); font-weight: 600; }
+.status-skipped { color: var(--muted); }
+
+/* ── MISC ───────────────────────────────── */
+.loading-msg { text-align: center; padding: 40px; color: var(--muted); }
+.tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+.tag-sms { background: #dbeafe; color: #1d4ed8; }
+.tag-email { background: #fce7f3; color: #9d174d; }
+.score-high { color: var(--success); font-weight: 700; }
+.score-mid { color: var(--warning); font-weight: 700; }
+.score-low { color: var(--danger); font-weight: 700; }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="login-card">
+    <h1>BEP Comms</h1>
+    <p>Sign in to manage your patient communications</p>
+    <div class="form-group">
+      <label>Email</label>
+      <input type="email" id="login-email" placeholder="you@beachsideep.com.au">
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" id="login-password" placeholder="••••••••">
+    </div>
+    <button class="btn-primary" onclick="login()">Sign In</button>
+    <div class="login-error" id="login-error"></div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-brand">
+      BEP Comms
+      <span>Beachside Exercise Physiology</span>
+    </div>
+    <div class="nav-item active" onclick="showPanel('queue')" id="nav-queue">
+      <span class="nav-icon">📋</span> Queue
+      <span class="badge" id="queue-badge" style="display:none">0</span>
+    </div>
+    <div class="nav-item" onclick="showPanel('inbox')" id="nav-inbox">
+      <span class="nav-icon">💬</span> Inbox
+      <span class="badge" id="inbox-badge" style="display:none">0</span>
+    </div>
+    <div class="nav-item" onclick="showPanel('templates')" id="nav-templates">
+      <span class="nav-icon">✏️</span> Templates
+    </div>
+    <div class="nav-item" onclick="showPanel('log')" id="nav-log">
+      <span class="nav-icon">📜</span> Send Log
+    </div>
+    <div class="nav-item" onclick="showPanel('ratings')" id="nav-ratings">
+      <span class="nav-icon">⭐</span> Ratings
+    </div>
+    <div class="sidebar-bottom">
+      <button class="logout-btn" onclick="logout()">Sign out</button>
+    </div>
+  </div>
+
+  <!-- Main -->
+  <div class="main">
+    <div class="topbar">
+      <h2 id="panel-title">Approval Queue</h2>
+      <div class="topbar-actions">
+        <button class="btn-refresh" onclick="refreshCurrent()">↻ Refresh</button>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <!-- QUEUE PANEL -->
+      <div class="panel active" id="panel-queue">
+        <div id="queue-content"><div class="loading-msg">Loading queue...</div></div>
+      </div>
+
+      <!-- INBOX PANEL -->
+      <div class="panel" id="panel-inbox">
+        <div class="inbox-layout">
+          <div class="conversation-list" id="conv-list">
+            <div class="loading-msg">Loading...</div>
+          </div>
+          <div class="chat-panel" id="chat-panel">
+            <div class="chat-empty">Select a conversation</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TEMPLATES PANEL -->
+      <div class="panel" id="panel-templates">
+        <div id="templates-content"><div class="loading-msg">Loading templates...</div></div>
+      </div>
+
+      <!-- LOG PANEL -->
+      <div class="panel" id="panel-log">
+        <div id="log-stats" class="stat-row" style="display:none"></div>
+        <div class="card">
+          <div class="card-header"><h3>Send History</h3></div>
+          <div id="log-content"><div class="loading-msg">Loading...</div></div>
+        </div>
+      </div>
+
+      <!-- RATINGS PANEL -->
+      <div class="panel" id="panel-ratings">
+        <div id="ratings-stats" class="stat-row" style="display:none"></div>
+        <div class="card">
+          <div class="card-header"><h3>Patient Ratings</h3></div>
+          <div id="ratings-content"><div class="loading-msg">Loading...</div></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+const WORKER = 'WORKER_URL_PLACEHOLDER';
+let TOKEN = localStorage.getItem('bep_comms_token') || '';
+let currentPanel = 'queue';
+let activeConvId = null;
+
+// ── AUTH ─────────────────────────────────────────────────────
+
+async function login() {
+  const email = document.getElementById('login-email').value;
+  const pass  = document.getElementById('login-password').value;
+  const err   = document.getElementById('login-error');
+  err.textContent = '';
+  try {
+    const res = await fetch(`${WORKER}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password: pass }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Login failed');
+    TOKEN = data.token;
+    localStorage.setItem('bep_comms_token', TOKEN);
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app').classList.add('visible');
+    initApp();
+  } catch (e) {
+    err.textContent = e.message;
+  }
+}
+
+function logout() {
+  TOKEN = '';
+  localStorage.removeItem('bep_comms_token');
+  location.reload();
+}
+
+document.getElementById('login-password').addEventListener('keydown', e => {
+  if (e.key === 'Enter') login();
+});
+
+// ── INIT ─────────────────────────────────────────────────────
+
+function initApp() {
+  if (TOKEN) {
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app').classList.add('visible');
+  }
+  loadQueue();
+  loadInboxBadge();
+}
+
+async function api(action, method, body) {
+  const opts = {
+    method: method || 'GET',
+    headers: { Authorization: 'Bearer ' + TOKEN, 'Content-Type': 'application/json' },
+  };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(`${WORKER}?action=${action}`, opts);
+  if (res.status === 401) { logout(); return null; }
+  return res.json();
+}
+
+// ── NAVIGATION ───────────────────────────────────────────────
+
+const panelTitles = {
+  queue: 'Approval Queue', inbox: 'Inbox',
+  templates: 'Message Templates', log: 'Send Log', ratings: 'Ratings',
+};
+
+function showPanel(name) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('panel-' + name).classList.add('active');
+  document.getElementById('nav-' + name).classList.add('active');
+  document.getElementById('panel-title').textContent = panelTitles[name];
+  currentPanel = name;
+  if (name === 'queue') loadQueue();
+  if (name === 'inbox') loadInbox();
+  if (name === 'templates') loadTemplates();
+  if (name === 'log') loadLog();
+  if (name === 'ratings') loadRatings();
+}
+
+function refreshCurrent() { showPanel(currentPanel); }
+
+// ── QUEUE ─────────────────────────────────────────────────────
+
+async function loadQueue() {
+  document.getElementById('queue-content').innerHTML = '<div class="loading-msg">Loading queue...</div>';
+  const data = await api('get_queue');
+  if (!data) return;
+  const q = data.queue || [];
+
+  // Update badge
+  const badge = document.getElementById('queue-badge');
+  if (q.length > 0) { badge.style.display = ''; badge.textContent = q.length; }
+  else { badge.style.display = 'none'; }
+
+  if (q.length === 0) {
+    document.getElementById('queue-content').innerHTML = `
+      <div class="queue-empty">
+        <div class="icon">✅</div>
+        <p>Queue is empty — nothing to approve right now.</p>
+      </div>`;
+    return;
+  }
+
+  const rows = q.map(item => `
+    <tr id="row-${item.id}">
+      <td>
+        <strong>${item.patient_name}</strong><br>
+        <span style="font-size:12px;color:var(--muted)">${item.patient_phone || '—'} · ${item.patient_email || '—'}</span>
+      </td>
+      <td><span class="badge-pill ${badgeClass(item.trigger_key)}">${item.trigger_label}</span></td>
+      <td>
+        <div class="preview-sms">${escHtml(item.sms_body)}</div>
+        <div class="preview-email-subject">📧 ${escHtml(item.email_subject)}</div>
+      </td>
+      <td style="color:var(--muted);font-size:12px">${fmtDate(item.queued_at)}</td>
+      <td>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-approve" onclick="approve('${item.id}')">✓ Approve</button>
+          <button class="btn btn-skip" onclick="skip('${item.id}')">Skip</button>
+        </div>
+      </td>
+    </tr>`).join('');
+
+  document.getElementById('queue-content').innerHTML = `
+    <div class="card">
+      <div class="card-header">
+        <h3>${q.length} message${q.length !== 1 ? 's' : ''} pending approval</h3>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Patient</th><th>Trigger</th><th>Preview</th><th>Queued</th><th>Action</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+async function approve(id) {
+  const btn = document.querySelector(`#row-${id} .btn-approve`);
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
+  const data = await api('approve', 'POST', { id });
+  if (data && data.ok) {
+    document.getElementById('row-' + id).remove();
+    checkQueueEmpty();
+  } else {
+    if (btn) { btn.disabled = false; btn.textContent = '✓ Approve'; }
+    alert('Send failed: ' + (data ? (data.errors || []).join(', ') : 'Unknown error'));
+  }
+}
+
+async function skip(id) {
+  await api('skip', 'POST', { id });
+  document.getElementById('row-' + id).remove();
+  checkQueueEmpty();
+}
+
+function checkQueueEmpty() {
+  const tbody = document.querySelector('#panel-queue tbody');
+  if (tbody && tbody.children.length === 0) {
+    document.getElementById('queue-content').innerHTML = `
+      <div class="queue-empty"><div class="icon">✅</div><p>Queue is empty.</p></div>`;
+    document.getElementById('queue-badge').style.display = 'none';
+  }
+}
+
+// ── INBOX ─────────────────────────────────────────────────────
+
+async function loadInboxBadge() {
+  const data = await api('get_inbox');
+  if (!data) return;
+  const unread = (data.conversations || []).filter(c => c.unread).length;
+  const badge = document.getElementById('inbox-badge');
+  if (unread > 0) { badge.style.display = ''; badge.textContent = unread; }
+  else { badge.style.display = 'none'; }
+}
+
+async function loadInbox() {
+  document.getElementById('conv-list').innerHTML = '<div class="loading-msg">Loading...</div>';
+  const data = await api('get_inbox');
+  if (!data) return;
+  const convs = data.conversations || [];
+
+  // Update badge
+  const unread = convs.filter(c => c.unread).length;
+  const badge = document.getElementById('inbox-badge');
+  if (unread > 0) { badge.style.display = ''; badge.textContent = unread; }
+  else { badge.style.display = 'none'; }
+
+  if (convs.length === 0) {
+    document.getElementById('conv-list').innerHTML = '<div class="loading-msg" style="font-size:13px">No conversations yet</div>';
+    return;
+  }
+
+  document.getElementById('conv-list').innerHTML = convs.map(c => `
+    <div class="conv-item ${c.unread ? 'unread' : ''} ${activeConvId === c.id ? 'active' : ''}"
+         onclick="openConversation('${c.id}', '${escAttr(c.patient_name)}', '${escAttr(c.patient_phone||'')}', '${escAttr(c.patient_email||'')}')">
+      <div class="conv-name">
+        ${c.unread ? '<div class="unread-dot"></div>' : ''}
+        ${escHtml(c.patient_name)}
+        <span class="conv-time">${c.last_message_at ? fmtDate(c.last_message_at) : ''}</span>
+      </div>
+      <div class="conv-preview">${escHtml(c.last_message_preview || 'No messages yet')}</div>
+    </div>`).join('');
+}
+
+let replyChannel = 'sms';
+
+async function openConversation(id, name, phone, email) {
+  activeConvId = id;
+  // Highlight active
+  document.querySelectorAll('.conv-item').forEach(el => el.classList.remove('active'));
+  event.currentTarget.classList.add('active');
+  event.currentTarget.classList.remove('unread');
+
+  const chatPanel = document.getElementById('chat-panel');
+  chatPanel.innerHTML = `
+    <div class="chat-header">
+      <h3>${escHtml(name)}</h3>
+      <p>${phone ? '📱 ' + escHtml(phone) : ''} ${email ? '· ✉️ ' + escHtml(email) : ''}</p>
+    </div>
+    <div class="chat-messages" id="chat-messages"><div class="loading-msg">Loading...</div></div>
+    <div class="reply-area">
+      <div class="reply-controls">
+        <button class="channel-toggle active" id="toggle-sms" onclick="setChannel('sms')">📱 SMS</button>
+        <button class="channel-toggle" id="toggle-email" onclick="setChannel('email')">✉️ Email</button>
+      </div>
+      <input type="text" class="reply-subject" id="reply-subject" placeholder="Subject" style="display:none">
+      <div class="reply-row">
+        <textarea class="reply-input" id="reply-input" rows="2" placeholder="Type a message..."></textarea>
+        <button class="btn btn-send" onclick="sendReply('${id}', '${escAttr(phone)}', '${escAttr(email)}')">Send</button>
+      </div>
+    </div>`;
+
+  replyChannel = 'sms';
+
+  // Load messages
+  const data = await api('get_messages&conversation_id=' + id);
+  const msgs = (data && data.messages) || [];
+  const container = document.getElementById('chat-messages');
+
+  if (msgs.length === 0) {
+    container.innerHTML = '<div style="text-align:center;color:var(--muted);font-size:14px;margin:auto">No messages yet</div>';
+  } else {
+    container.innerHTML = msgs.map(m => `
+      <div class="msg-bubble ${m.direction}">
+        <div class="msg-content">${escHtml(m.body)}</div>
+        <div class="msg-meta">
+          <span class="msg-channel ${m.channel}">${m.channel}</span>
+          ${fmtDateFull(m.created_at)}
+        </div>
+      </div>`).join('');
+    container.scrollTop = container.scrollHeight;
+  }
+
+  // Remove unread dot from sidebar
+  loadInboxBadge();
+}
+
+function setChannel(ch) {
+  replyChannel = ch;
+  document.getElementById('toggle-sms').classList.toggle('active', ch === 'sms');
+  document.getElementById('toggle-email').classList.toggle('active', ch === 'email');
+  const subjectInput = document.getElementById('reply-subject');
+  if (subjectInput) subjectInput.style.display = ch === 'email' ? 'block' : 'none';
+}
+
+async function sendReply(convId, phone, email) {
+  const input = document.getElementById('reply-input');
+  const subjectInput = document.getElementById('reply-subject');
+  const message = input ? input.value.trim() : '';
+  const subject = subjectInput ? subjectInput.value.trim() : '';
+  if (!message) return;
+
+  const btn = document.querySelector('.btn-send');
+  if (btn) { btn.disabled = true; btn.textContent = '...'; }
+
+  const data = await api('send_message', 'POST', {
+    conversation_id: convId,
+    channel: replyChannel,
+    message,
+    subject: subject || 'Message from Beachside EP',
+  });
+
+  if (btn) { btn.disabled = false; btn.textContent = 'Send'; }
+
+  if (data && data.ok) {
+    if (input) input.value = '';
+    // Reload conversation
+    openConversation(convId,
+      document.querySelector('.chat-header h3').textContent,
+      phone, email);
+  } else {
+    alert('Failed to send: ' + (data ? data.error : 'Unknown error'));
+  }
+}
+
+// ── TEMPLATES ─────────────────────────────────────────────────
+
+async function loadTemplates() {
+  document.getElementById('templates-content').innerHTML = '<div class="loading-msg">Loading templates...</div>';
+  const data = await api('get_templates');
+  if (!data) return;
+  const templates = data.templates || [];
+
+  document.getElementById('templates-content').innerHTML = `
+    <div class="template-grid">
+      ${templates.map(t => `
+        <div class="template-card">
+          <div class="template-header">
+            <h4>${escHtml(t.trigger_label)}</h4>
+            <div class="toggle-active">
+              <input type="checkbox" id="active-${t.id}" ${t.is_active ? 'checked' : ''}
+                onchange="saveTemplate('${t.id}')">
+              <label for="active-${t.id}">Active</label>
+            </div>
+          </div>
+          <div class="template-body">
+            <div class="template-field">
+              <label>SMS Message</label>
+              <textarea id="sms-${t.id}" rows="3">${escHtml(t.sms_body)}</textarea>
+            </div>
+            <div class="template-field">
+              <label>Email Subject</label>
+              <input type="text" id="subj-${t.id}" value="${escAttr(t.email_subject)}">
+            </div>
+            <div class="template-field">
+              <label>Email Body</label>
+              <textarea id="email-${t.id}" rows="6">${escHtml(t.email_body)}</textarea>
+            </div>
+          </div>
+          <div class="template-actions">
+            <span class="save-indicator" id="saved-${t.id}" style="display:none">✓ Saved</span>
+            <button class="btn btn-send btn-sm" onclick="saveTemplate('${t.id}')">Save</button>
+          </div>
+        </div>`).join('')}
+    </div>
+    <p style="margin-top:16px;font-size:12px;color:var(--muted)">
+      Variables: <code>{{first_name}}</code> · <code>{{rating_link}}</code> · <code>{{booking_link}}</code>
+    </p>`;
+}
+
+async function saveTemplate(id) {
+  const sms    = document.getElementById('sms-' + id)?.value;
+  const subj   = document.getElementById('subj-' + id)?.value;
+  const email  = document.getElementById('email-' + id)?.value;
+  const active = document.getElementById('active-' + id)?.checked;
+
+  await api('update_template', 'POST', {
+    id, sms_body: sms, email_subject: subj, email_body: email, is_active: active,
+  });
+
+  const indicator = document.getElementById('saved-' + id);
+  if (indicator) {
+    indicator.style.display = 'inline';
+    setTimeout(() => { indicator.style.display = 'none'; }, 2000);
+  }
+}
+
+// ── LOG ───────────────────────────────────────────────────────
+
+async function loadLog() {
+  document.getElementById('log-content').innerHTML = '<div class="loading-msg">Loading...</div>';
+  const data = await api('get_log');
+  if (!data) return;
+  const log = data.log || [];
+
+  // Stats
+  const sent   = log.filter(r => r.status === 'sent').length;
+  const failed = log.filter(r => r.status === 'failed').length;
+  document.getElementById('log-stats').style.display = 'grid';
+  document.getElementById('log-stats').innerHTML = `
+    <div class="stat-card"><div class="label">Total Sent</div><div class="value">${sent}</div></div>
+    <div class="stat-card"><div class="label">Failed</div><div class="value" style="color:var(--danger)">${failed}</div></div>
+    <div class="stat-card"><div class="label">Success Rate</div><div class="value">${sent + failed > 0 ? Math.round(sent/(sent+failed)*100) : 0}%</div></div>
+    <div class="stat-card"><div class="label">Total Records</div><div class="value">${log.length}</div></div>`;
+
+  if (log.length === 0) {
+    document.getElementById('log-content').innerHTML = '<div class="loading-msg">No sends yet</div>';
+    return;
+  }
+
+  document.getElementById('log-content').innerHTML = `
+    <table>
+      <thead><tr><th>Patient</th><th>Trigger</th><th>Channel</th><th>Status</th><th>Sent At</th><th>Note</th></tr></thead>
+      <tbody>
+        ${log.map(r => `
+          <tr>
+            <td>${escHtml(r.patient_name || '—')}</td>
+            <td>${escHtml(r.trigger_label || r.trigger_key || '—')}</td>
+            <td>${r.channel ? r.channel.split('+').map(c => `<span class="tag tag-${c}">${c}</span>`).join(' ') : '—'}</td>
+            <td class="status-${r.status}">${r.status}</td>
+            <td style="color:var(--muted);font-size:12px">${fmtDate(r.sent_at)}</td>
+            <td style="font-size:12px;color:var(--danger)">${escHtml(r.error_message || '')}</td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+// ── RATINGS ───────────────────────────────────────────────────
+
+async function loadRatings() {
+  document.getElementById('ratings-content').innerHTML = '<div class="loading-msg">Loading...</div>';
+  const data = await api('get_ratings');
+  if (!data) return;
+  const ratings = data.ratings || [];
+
+  const avg = ratings.length > 0
+    ? (ratings.reduce((s, r) => s + r.score, 0) / ratings.length).toFixed(1) : '—';
+  const toGoogle = ratings.filter(r => r.routed_to_google).length;
+  const internal = ratings.filter(r => !r.routed_to_google).length;
+
+  document.getElementById('ratings-stats').style.display = 'grid';
+  document.getElementById('ratings-stats').innerHTML = `
+    <div class="stat-card"><div class="label">Average Score</div><div class="value">${avg}<span style="font-size:16px;color:var(--muted)">/10</span></div></div>
+    <div class="stat-card"><div class="label">Total Responses</div><div class="value">${ratings.length}</div></div>
+    <div class="stat-card"><div class="label">Sent to Google</div><div class="value" style="color:var(--success)">${toGoogle}</div><div class="sub">Scores 9–10</div></div>
+    <div class="stat-card"><div class="label">Internal Feedback</div><div class="value" style="color:var(--warning)">${internal}</div><div class="sub">Scores 1–8</div></div>`;
+
+  if (ratings.length === 0) {
+    document.getElementById('ratings-content').innerHTML = '<div class="loading-msg">No ratings yet</div>';
+    return;
+  }
+
+  document.getElementById('ratings-content').innerHTML = `
+    <table>
+      <thead><tr><th>Patient ID</th><th>Trigger</th><th>Score</th><th>Feedback</th><th>Google</th><th>Date</th></tr></thead>
+      <tbody>
+        ${ratings.map(r => `
+          <tr>
+            <td>${r.patient_id}</td>
+            <td>${escHtml(r.trigger_key)}</td>
+            <td class="${scoreClass(r.score)}">${r.score}/10</td>
+            <td style="font-size:13px;max-width:300px">${escHtml(r.feedback || '—')}</td>
+            <td>${r.routed_to_google ? '✅' : '—'}</td>
+            <td style="color:var(--muted);font-size:12px">${fmtDate(r.submitted_at)}</td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+// ── HELPERS ───────────────────────────────────────────────────
+
+function escHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function escAttr(str) {
+  if (!str) return '';
+  return String(str).replace(/'/g,"\\'").replace(/"/g,'&quot;');
+}
+
+function fmtDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-AU', { day:'numeric', month:'short' }) + ' ' +
+    d.toLocaleTimeString('en-AU', { hour:'2-digit', minute:'2-digit' });
+}
+
+function fmtDateFull(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-AU', { day:'numeric', month:'short', year:'numeric' }) + ' ' +
+    d.toLocaleTimeString('en-AU', { hour:'2-digit', minute:'2-digit' });
+}
+
+function badgeClass(key) {
+  if (key.startsWith('review')) return 'badge-review';
+  if (key.startsWith('reactivation')) return 'badge-reactivation';
+  if (key === 'birthday') return 'badge-birthday';
+  return '';
+}
+
+function scoreClass(score) {
+  if (score >= 9) return 'score-high';
+  if (score >= 6) return 'score-mid';
+  return 'score-low';
+}
+
+// ── BOOT ─────────────────────────────────────────────────────
+
+if (TOKEN) initApp();
+</script>
+</body>
+</html>
