@@ -226,6 +226,7 @@ tr:hover td { background: #f8fafc; }
 .score-mid { color: var(--warning); font-weight: 700; }
 .score-low { color: var(--danger); font-weight: 700; }
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 </head>
 <body>
 
@@ -322,6 +323,12 @@ tr:hover td { background: #f8fafc; }
       <!-- RATINGS PANEL -->
       <div class="panel" id="panel-ratings">
         <div id="ratings-stats" class="stat-row" style="display:none"></div>
+        <div class="card" style="margin-bottom:20px">
+          <div class="card-header"><h3>Average Score Over Time</h3></div>
+          <div style="padding:20px">
+            <canvas id="ratings-chart" height="100"></canvas>
+          </div>
+        </div>
         <div class="card">
           <div class="card-header"><h3>Patient Ratings</h3></div>
           <div id="ratings-content"><div class="loading-msg">Loading...</div></div>
@@ -777,6 +784,58 @@ async function loadRatings() {
           </tr>`).join('')}
       </tbody>
     </table>`;
+
+  // ── RATINGS CHART ─────────────────────────────────────────
+  // Group by week, calculate average score per week
+  const weekMap = {};
+  ratings.forEach(r => {
+    const d = new Date(r.submitted_at);
+    const week = d.toISOString().slice(0, 10); // group by day for now
+    if (!weekMap[week]) weekMap[week] = [];
+    weekMap[week].push(r.score);
+  });
+
+  const labels = Object.keys(weekMap).sort();
+  const dataPoints = labels.map(w => {
+    const scores = weekMap[w];
+    return (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1);
+  });
+
+  const canvas = document.getElementById('ratings-chart');
+  if (canvas) {
+    if (window._ratingsChart) window._ratingsChart.destroy();
+    window._ratingsChart = new Chart(canvas, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Average Score',
+          data: dataPoints,
+          borderColor: '#0ea5e9',
+          backgroundColor: 'rgba(14,165,233,0.1)',
+          tension: 0.3,
+          fill: true,
+          pointBackgroundColor: '#0ea5e9',
+          pointRadius: 5,
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: ctx => `Score: ${ctx.parsed.y}/10` } }
+        },
+        scales: {
+          y: {
+            min: 0, max: 10,
+            ticks: { stepSize: 2 },
+            grid: { color: '#f1f5f9' }
+          },
+          x: { grid: { display: false } }
+        }
+      }
+    });
+  }
 }
 
 // ── HELPERS ───────────────────────────────────────────────────
