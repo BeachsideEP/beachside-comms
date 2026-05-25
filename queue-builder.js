@@ -75,15 +75,14 @@ async function sbPatch(table, filter, body) {
 }
 
 async function getPatientContact(patientId) {
+  // Read contact details from Supabase (synced from Cliniko by sync.js)
+  // Avoids JS number precision issues with large Cliniko IDs
   try {
-    const data = await httpGet(`${CLINIKO_BASE}/patients/${patientId}`, clinikoHeaders);
-    const email = data.email || null;
-    const phones = data.patient_phone_numbers || [];
-    const mobile = phones.find(p => p.phone_type === 'Mobile');
-    const phone = mobile ? mobile.number : (phones[0] ? phones[0].number : null);
-    return { email, phone };
+    const rows = await sbGet('patients', `id=eq.${patientId}&select=email,phone`);
+    if (rows && rows[0]) return { email: rows[0].email || null, phone: rows[0].phone || null };
+    return { email: null, phone: null };
   } catch(e) {
-    console.warn(`  ! Contact fetch failed for patient ${patientId}:`, e.message);
+    console.warn(`  ! Could not fetch contact for patient ${patientId}:`, e.message);
     return { email: null, phone: null };
   }
 }
@@ -122,6 +121,7 @@ async function addToQueue(patient, triggerKey, settings, template) {
     first_name:   patient.first_name,
     rating_link:  isReview ? `${settings.rating_page_base_url}?t=${token}` : '',
     booking_link: settings.booking_link,
+    booking_link_html: `<a href="${settings.booking_link}">Book here</a>`,
   };
   await sbPost('message_queue', {
     patient_id:    patient.id,
