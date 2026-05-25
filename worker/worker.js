@@ -316,6 +316,38 @@ async function route(request, env, cors) {
     return new Response('OK', { status: 200 });
   }
 
+  // ── RATING SUBMISSION (public — no auth required) ─────────
+  if (action === 'submit_rating' && request.method === 'POST') {
+    const body = await request.json().catch(() => ({}));
+    const { token, score, feedback } = body;
+    if (!token || !score) return json({ error: 'Missing token or score' }, 400, cors);
+
+    let patientId, triggerKey;
+    try {
+      const decoded = atob(token.replace(/-/g, '+').replace(/_/g, '/'));
+      [patientId, triggerKey] = decoded.split(':');
+    } catch {
+      return json({ error: 'Invalid token' }, 400, cors);
+    }
+
+    const settings = await getSettings(env);
+    const routedToGoogle = Number(score) >= 9;
+
+    await sbPost(env, 'ratings', {
+      patient_id: Number(patientId),
+      trigger_key: triggerKey,
+      score: Number(score),
+      feedback: feedback || null,
+      routed_to_google: routedToGoogle,
+    });
+
+    return json({
+      ok: true,
+      routed_to_google: routedToGoogle,
+      google_review_link: routedToGoogle ? settings.google_review_link : null,
+    }, 200, cors);
+  }
+
   // ── ALL OTHER ROUTES REQUIRE AUTH ──────────────────────────
   if (!checkAuth(request, env)) {
     return json({ error: 'Unauthorized' }, 401, cors);
@@ -564,39 +596,6 @@ async function route(request, env, cors) {
       value, updated_at: new Date().toISOString(),
     });
     return json({ ok: true }, 200, cors);
-  }
-
-  // ── RATING SUBMISSION (public — no auth) ──────────────────
-  if (action === 'submit_rating' && request.method === 'POST') {
-    const body = await request.json().catch(() => ({}));
-    const { token, score, feedback } = body;
-    if (!token || !score) return json({ error: 'Missing token or score' }, 400, cors);
-
-    // Decode token: patientId:triggerKey:timestamp
-    let patientId, triggerKey;
-    try {
-      const decoded = atob(token.replace(/-/g, '+').replace(/_/g, '/'));
-      [patientId, triggerKey] = decoded.split(':');
-    } catch {
-      return json({ error: 'Invalid token' }, 400, cors);
-    }
-
-    const settings = await getSettings(env);
-    const routedToGoogle = score >= 9;
-
-    await sbPost(env, 'ratings', {
-      patient_id: Number(patientId),
-      trigger_key: triggerKey,
-      score: Number(score),
-      feedback: feedback || null,
-      routed_to_google: routedToGoogle,
-    });
-
-    return json({
-      ok: true,
-      routed_to_google: routedToGoogle,
-      google_review_link: routedToGoogle ? settings.google_review_link : null,
-    }, 200, cors);
   }
 
   return json({ error: 'Unknown action' }, 400, cors);
