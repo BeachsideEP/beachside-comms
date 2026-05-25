@@ -497,7 +497,7 @@ async function route(request, env, cors) {
 
   // ── RATINGS ───────────────────────────────────────────────
   if (action === 'get_ratings') {
-    const res = await sb(env, 'ratings', 'select=*&order=submitted_at.desc&limit=200');
+    const res = await sb(env, 'ratings_with_names', 'select=*&order=submitted_at.desc&limit=200');
     if (!res.ok) throw new Error('Supabase error ' + res.status);
     return json({ ratings: await res.json() }, 200, cors);
   }
