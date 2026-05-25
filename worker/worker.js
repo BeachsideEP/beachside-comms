@@ -368,6 +368,8 @@ async function route(request, env, cors) {
       reactivation_6m: 'Re-activation — 6 Months Inactive',
       reactivation_12m: 'Re-activation — 12 Months Inactive',
       birthday: 'Birthday Message',
+      dna: 'Did Not Attend',
+      cancelled_no_rebook: 'Cancelled — No Rebook',
     };
     const queue = rows.map(r => ({ ...r, trigger_label: labelMap[r.trigger_key] || r.trigger_key }));
     return json({ queue }, 200, cors);
@@ -490,6 +492,8 @@ async function route(request, env, cors) {
       reactivation_6m: 'Re-activation — 6 Months Inactive',
       reactivation_12m: 'Re-activation — 12 Months Inactive',
       birthday: 'Birthday Message',
+      dna: 'Did Not Attend',
+      cancelled_no_rebook: 'Cancelled — No Rebook',
     };
     const logRows = await res.json();
     return json({ log: logRows.map(r => ({ ...r, trigger_label: labelMap[r.trigger_key] || r.trigger_key })) }, 200, cors);
