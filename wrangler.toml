@@ -1,0 +1,6 @@
+name = "bep-comms"
+main = "worker/worker.js"
+compatibility_date = "2024-01-01"
+
+# Routes — update with your actual domain after deployment
+# routes = [{ pattern = "comms.beachsideep.com.au/*", zone_name = "beachsideep.com.au" }]
