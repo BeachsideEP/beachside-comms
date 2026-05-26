@@ -140,7 +140,9 @@ async function addToQueue(patient, triggerKey, settings, template) {
 }
 
 async function processCandidate(patient, triggerKey, settings, template, stats, label) {
-  if (await hasFutureBooking(patient.id)) {
+  // Future booking suppression only applies to reactivation — not reviews, birthdays or DNA
+  const isReactivation = triggerKey.startsWith('reactivation_');
+  if (isReactivation && await hasFutureBooking(patient.id)) {
     console.log(`    ${patient.first_name} ${patient.last_name} — skipped (future booking)`);
     stats.skipped++; return;
   }
