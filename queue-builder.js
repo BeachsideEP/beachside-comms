@@ -168,31 +168,26 @@ async function checkReviewTriggers(settings, stats) {
   const windowStart = new Date(now - 48 * 60 * 60 * 1000).toISOString();
   const windowEnd   = new Date(now - 20 * 60 * 60 * 1000).toISOString();
 
-  const allCompleted = await sbGet('appointments',
-    'is_completed=eq.true&is_cancelled=eq.false&is_dna=eq.false&select=patient_id,starts_at');
-
-  const countMap = {};
-  const latestMap = {};
-  for (const row of allCompleted) {
-    countMap[row.patient_id] = (countMap[row.patient_id] || 0) + 1;
-    if (!latestMap[row.patient_id] || row.starts_at > latestMap[row.patient_id])
-      latestMap[row.patient_id] = row.starts_at;
-  }
-
   for (const { count, triggerKey } of milestones) {
     console.log(`\n  Checking ${triggerKey}...`);
     const template = await getTemplate(triggerKey);
     if (!template) { console.log('  Inactive — skipping'); continue; }
 
-    const eligibleIds = Object.entries(countMap)
-      .filter(([id, c]) => c === count && latestMap[id] >= windowStart && latestMap[id] <= windowEnd)
-      .map(([id]) => Number(id));
+    // Use the view — filter by exact count and last appointment in window
+    // Supabase handles the large IDs, JS never processes them as numbers
+    const rows = await sbGet('patient_appointment_counts',
+      `total_completed=eq.${count}&last_completed_at=gte.${windowStart}&last_completed_at=lte.${windowEnd}&select=patient_id`);
 
-    console.log(`  ${eligibleIds.length} candidate(s)`);
-    if (!eligibleIds.length) continue;
+    if (!rows || rows.length === 0) { console.log('  0 candidate(s)'); continue; }
+    console.log(`  ${rows.length} candidate(s)`);
 
-    const patients = await sbGet('patients', `id=in.(${eligibleIds.join(',')})&select=id,first_name,last_name`);
-    for (const p of patients) await processCandidate(p, triggerKey, settings, template, stats, `${count} appts`);
+    const patientIds = rows.map(r => r.patient_id);
+    const patients = await sbGet('patients',
+      `id=in.(${patientIds.join(',')})&select=id,first_name,last_name,email,phone`);
+
+    for (const p of patients) {
+      await processCandidate(p, triggerKey, settings, template, stats, `${count} appts`);
+    }
   }
 }
 
@@ -205,13 +200,6 @@ async function checkReactivationTriggers(settings, stats) {
   ];
   const now = new Date();
 
-  const allCompleted = await sbGet('appointments', 'is_completed=eq.true&is_cancelled=eq.false&select=patient_id,starts_at');
-  const globalLatest = {};
-  for (const row of allCompleted) {
-    if (!globalLatest[row.patient_id] || row.starts_at > globalLatest[row.patient_id])
-      globalLatest[row.patient_id] = row.starts_at;
-  }
-
   for (const { triggerKey, minDays, maxDays } of segments) {
     console.log(`\n  Checking ${triggerKey}...`);
     const template = await getTemplate(triggerKey);
@@ -220,15 +208,21 @@ async function checkReactivationTriggers(settings, stats) {
     const cutoffMin = new Date(now - maxDays * 864e5).toISOString();
     const cutoffMax = new Date(now - minDays * 864e5).toISOString();
 
-    const eligibleIds = Object.entries(globalLatest)
-      .filter(([, latest]) => latest >= cutoffMin && latest <= cutoffMax)
-      .map(([id]) => Number(id));
+    // Use the view — Supabase does the grouping, JS never handles large IDs
+    const rows = await sbGet('patient_last_appointment',
+      `last_completed_at=gte.${cutoffMin}&last_completed_at=lte.${cutoffMax}&select=patient_id,last_completed_at`);
 
-    console.log(`  ${eligibleIds.length} candidate(s)`);
-    if (!eligibleIds.length) continue;
+    if (!rows || rows.length === 0) { console.log('  No candidates'); continue; }
+    console.log(`  ${rows.length} candidate(s)`);
 
-    const patients = await sbGet('patients', `id=in.(${eligibleIds.join(',')})&select=id,first_name,last_name`);
-    for (const p of patients) await processCandidate(p, triggerKey, settings, template, stats, `${minDays}d inactive`);
+    // Fetch patient details using the patient_ids from the view (as strings to avoid precision loss)
+    const patientIds = rows.map(r => r.patient_id);
+    const patients = await sbGet('patients',
+      `id=in.(${patientIds.join(',')})&select=id,first_name,last_name,email,phone`);
+
+    for (const p of patients) {
+      await processCandidate(p, triggerKey, settings, template, stats, `${minDays}d inactive`);
+    }
   }
 }
 
