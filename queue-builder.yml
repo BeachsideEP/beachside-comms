@@ -1,0 +1,25 @@
+name: Daily Queue Builder
+
+on:
+  schedule:
+    # 7am AEST = 9pm UTC (Brisbane, no daylight saving)
+    - cron: '0 21 * * *'
+    # Backup run at 7:30am AEST in case first is skipped
+    - cron: '30 21 * * *'
+  workflow_dispatch:
+
+jobs:
+  build-queue:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm install
+      - name: Run queue builder
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          CLINIKO_API_KEY: ${{ secrets.CLINIKO_API_KEY }}
+        run: node queue-builder.js
