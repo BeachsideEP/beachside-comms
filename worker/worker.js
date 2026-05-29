@@ -455,11 +455,34 @@ async function route(request, env, cors) {
   if (action === 'skip') {
     const body = await request.json().catch(() => ({}));
     const { id, notes } = body;
+
+    // Get the queue item so we can write a suppression record
+    const item = await sbOne(env, 'message_queue', `id=eq.${id}&select=patient_id,trigger_key`);
+
     await sbPatch(env, 'message_queue', `id=eq.${id}`, {
       status: 'skipped',
       reviewed_at: new Date().toISOString(),
       notes: notes || null,
     });
+
+    // Write suppression so this patient isn't re-queued for this trigger
+    if (item) {
+      await fetch(`${env.SUPABASE_URL}/rest/v1/patient_suppressions`, {
+        method: 'POST',
+        headers: {
+          apikey: env.SUPABASE_SERVICE_KEY,
+          Authorization: 'Bearer ' + env.SUPABASE_SERVICE_KEY,
+          'Content-Type': 'application/json',
+          Prefer: 'resolution=merge-duplicates,return=minimal',
+        },
+        body: JSON.stringify({
+          patient_id: item.patient_id,
+          trigger_key: item.trigger_key,
+          last_queued_at: new Date().toISOString(),
+        }),
+      });
+    }
+
     return json({ ok: true }, 200, cors);
   }
 
