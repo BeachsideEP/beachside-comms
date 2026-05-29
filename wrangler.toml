@@ -1,4 +1,4 @@
-name = "bep-comms"
+name = "beachside-comms"
 main = "worker/worker.js"
 compatibility_date = "2024-01-01"
 
