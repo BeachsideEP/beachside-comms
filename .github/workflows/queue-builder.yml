@@ -2,8 +2,10 @@ name: Daily Queue Builder
 
 on:
   schedule:
-    # 7am AEST = 9pm UTC (Brisbane, no daylight saving)
-    - cron: '0 21 * * *'
+    # Midnight AEST = 2pm UTC (Brisbane, no daylight saving)
+    - cron: '0 14 * * *'
+    # Backup run at 12:30am AEST in case first is skipped
+    - cron: '30 14 * * *'
   workflow_dispatch:
 
 jobs:
