@@ -452,12 +452,8 @@ async function syncAppointments() {
 }
 
 
+async function main() {
   console.log('============================================================');
-  console.log('BEP Comms — Queue Builder — ' + new Date().toISOString());
-  console.log('============================================================');
-
-  // Sync patients and appointments first so new data is available for queue builder
-  await syncPatients();
   await syncAppointments();
 
   const settings = await getSettings();
