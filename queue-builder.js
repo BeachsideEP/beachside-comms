@@ -306,10 +306,160 @@ async function checkCancelledNoRebookTrigger(settings, stats) {
   }
 }
 
-async function main() {
+// ============================================================
+// LIGHTWEIGHT PATIENT SYNC
+// Fetches new/updated patients from Cliniko since last sync
+// Runs before queue builder so new patients are always available
+// ============================================================
+
+async function clinikoFetchAll(path, entityKey) {
+  const results = [];
+  let url = `${CLINIKO_BASE}/${path}`;
+  let page = 0;
+  while (url) {
+    page++;
+    if (page <= 2 || page % 10 === 0) console.log(`  [Cliniko] page ${page}`);
+    const data = await httpGet(url, clinikoHeaders);
+    const items = data[entityKey] || [];
+    results.push(...items);
+    await sleep(350);
+    url = (data.links && data.links.next) ? data.links.next : null;
+  }
+  return results;
+}
+
+async function syncPatients() {
+  console.log('\n── Patient Sync ──');
+  try {
+    const settings = await getSettings();
+    const lastSync = settings.last_patient_sync || '2020-01-01T00:00:00Z';
+    console.log(`  Fetching patients updated since ${lastSync}...`);
+
+    const items = await clinikoFetchAll(
+      `patients?per_page=100&updated_since=${encodeURIComponent(lastSync)}`,
+      'patients'
+    );
+
+    console.log(`  Found ${items.length} updated patient(s)`);
+
+    if (items.length > 0) {
+      const rows = items.map(p => {
+        const phones = p.patient_phone_numbers || [];
+        const mobile = phones.find(ph => ph.phone_type === 'Mobile');
+        const phone = mobile ? mobile.number : (phones[0] ? phones[0].number : null);
+        return {
+          id: Number(p.id),
+          first_name: p.first_name,
+          last_name: p.last_name,
+          dob: p.date_of_birth || null,
+          referral_source: p.referral_source || null,
+          email: p.email || null,
+          phone: phone || null,
+          created_at: p.created_at,
+          updated_at: p.updated_at,
+        };
+      });
+
+      // Upsert in batches of 100
+      for (let i = 0; i < rows.length; i += 100) {
+        await httpRequest('POST', `${SUPABASE_URL}/rest/v1/patients`,
+          Object.assign({ 'Prefer': 'resolution=merge-duplicates,return=minimal' }, supabaseHeaders),
+          rows.slice(i, i + 100));
+      }
+      console.log(`  ✓ Synced ${rows.length} patient(s)`);
+    }
+
+    // Update last sync time
+    await httpRequest('PATCH', `${SUPABASE_URL}/rest/v1/settings?key=eq.last_patient_sync`,
+      Object.assign({ 'Prefer': 'return=minimal' }, supabaseHeaders),
+      { value: new Date().toISOString() });
+
+    console.log('  ✓ Last sync timestamp updated');
+  } catch(e) {
+    console.error('  Patient sync error:', e.message);
+  }
+}
+
+async function syncAppointments() {
+  console.log('\n── Appointment Sync ──');
+  try {
+    const settings = await getSettings();
+    const lastSync = settings.last_patient_sync || '2020-01-01T00:00:00Z';
+    console.log(`  Fetching appointments updated since ${lastSync}...`);
+
+    // Fetch active appointments
+    const active = await clinikoFetchAll(
+      `individual_appointments?per_page=100&updated_since=${encodeURIComponent(lastSync)}`,
+      'individual_appointments'
+    );
+
+    // Fetch cancelled appointments
+    const cancelled = await clinikoFetchAll(
+      `individual_appointments/cancelled?per_page=100&updated_since=${encodeURIComponent(lastSync)}`,
+      'individual_appointments'
+    );
+
+    const all = [...active, ...cancelled];
+    console.log(`  Found ${all.length} updated appointment(s)`);
+
+    if (all.length > 0) {
+      const rows = all.map(a => {
+        const isCancelled = !!a.cancelled_at;
+        let status;
+        if (isCancelled) status = 'cancelled';
+        else if (a.did_not_arrive === true) status = 'dna';
+        else if (new Date(a.starts_at) < new Date()) status = 'completed';
+        else status = 'booked';
+
+        // Extract patient_id from links
+        const patLink = a.patient && a.patient.links && a.patient.links.self ? a.patient.links.self : '';
+        const patId = patLink ? Number(patLink.split('/').pop()) : null;
+        const pracLink = a.practitioner && a.practitioner.links && a.practitioner.links.self ? a.practitioner.links.self : '';
+        const pracId = pracLink ? Number(pracLink.split('/').pop()) : null;
+
+        return {
+          id: Number(a.id),
+          patient_id: patId,
+          practitioner_id: pracId,
+          starts_at: a.starts_at,
+          ends_at: a.ends_at || null,
+          did_not_arrive: a.did_not_arrive === true,
+          patient_arrived: a.patient_arrived === true,
+          cancelled_at: isCancelled ? (a.cancelled_at || a.updated_at) : null,
+          cancellation_note: a.cancellation_note || null,
+          is_group: false,
+          attendee_count: 1,
+          status_clean: status,
+          is_completed: status === 'completed',
+          is_dna: status === 'dna',
+          is_cancelled: status === 'cancelled',
+          actual_revenue: 0,
+          created_at: a.created_at,
+          updated_at: a.updated_at,
+        };
+      });
+
+      for (let i = 0; i < rows.length; i += 100) {
+        await httpRequest('POST', `${SUPABASE_URL}/rest/v1/appointments`,
+          Object.assign({ 'Prefer': 'resolution=merge-duplicates,return=minimal' }, supabaseHeaders),
+          rows.slice(i, i + 100));
+      }
+      console.log(`  ✓ Synced ${rows.length} appointment(s)`);
+    }
+  } catch(e) {
+    console.error('  Appointment sync error:', e.message);
+  }
+}
+
+
   console.log('============================================================');
   console.log('BEP Comms — Queue Builder — ' + new Date().toISOString());
   console.log('============================================================');
+
+  // Sync patients and appointments first so new data is available for queue builder
+  await syncPatients();
+  await syncAppointments();
+
   const settings = await getSettings();
   const stats = { queued: 0, skipped: 0, errors: 0 };
   try { await checkReviewTriggers(settings, stats); } catch(e) { console.error('Review error:', e.message); stats.errors++; }
