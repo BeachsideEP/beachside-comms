@@ -102,9 +102,14 @@ function renderTemplate(text, vars) {
 }
 
 async function isAlreadyQueued(patientId, triggerKey) {
+  // Check message_queue
   const rows = await sbGet('message_queue',
     `patient_id=eq.${patientId}&trigger_key=eq.${triggerKey}&status=in.(pending,approved,sent)&select=id&limit=1`);
-  return rows.length > 0;
+  if (rows.length > 0) return true;
+  // Also check suppressions — covers skipped patients
+  const supRows = await sbGet('patient_suppressions',
+    `patient_id=eq.${patientId}&trigger_key=eq.${triggerKey}&select=patient_id&limit=1`);
+  return supRows.length > 0;
 }
 
 async function hasFutureBooking(patientId) {
