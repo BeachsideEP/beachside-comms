@@ -389,7 +389,7 @@ async function syncAppointments() {
   console.log('\n── Appointment Sync ──');
   try {
     const settings = await getSettings();
-    const lastSync = settings.last_patient_sync || '2020-01-01T00:00:00Z';
+    const lastSync = settings.last_appointment_sync || '2020-01-01T00:00:00Z';
     console.log(`  Fetching appointments updated since ${lastSync}...`);
 
     // Fetch active appointments
@@ -451,6 +451,13 @@ async function syncAppointments() {
       }
       console.log(`  ✓ Synced ${rows.length} appointment(s)`);
     }
+
+    // Update appointment sync timestamp
+    await httpRequest('PATCH', `${SUPABASE_URL}/rest/v1/settings?key=eq.last_appointment_sync`,
+      Object.assign({ 'Prefer': 'return=minimal' }, supabaseHeaders),
+      { value: new Date().toISOString() });
+    console.log('  ✓ Appointment sync timestamp updated');
+
   } catch(e) {
     console.error('  Appointment sync error:', e.message);
   }
@@ -459,6 +466,10 @@ async function syncAppointments() {
 
 async function main() {
   console.log('============================================================');
+  console.log('BEP Comms — Queue Builder — ' + new Date().toISOString());
+  console.log('============================================================');
+
+  await syncPatients();
   await syncAppointments();
 
   const settings = await getSettings();
