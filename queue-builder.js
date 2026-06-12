@@ -52,6 +52,23 @@ function httpRequest(method, url, headers, body) {
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
+// Normalise a phone number to E.164 for Australia.
+// Handles spaces, dashes, brackets and the common stored formats:
+//   "0412 345 678" / "0412-345-678" / "(02) 9876 5432" -> strips formatting first
+//   0412345678   -> +61412345678   (drop leading 0, add +61)
+//   61412345678  -> +61412345678   (add +)
+//   0061412345678-> +61412345678   (international 00 prefix -> +)
+//   +61412345678 -> unchanged       (already E.164)
+function toE164AU(raw) {
+  if (!raw) return raw;
+  let n = String(raw).trim().replace(/[^\d+]/g, ''); // strip spaces, dashes, parens, etc.
+  if (n.startsWith('+'))    return n;                 // already E.164
+  if (n.startsWith('0061')) return '+' + n.slice(2);  // 0061... -> +61...
+  if (n.startsWith('61'))   return '+' + n;           // 61...   -> +61...
+  if (n.startsWith('0'))    return '+61' + n.slice(1);// 0412... -> +61412...
+  return n;                                           // leave anything unexpected as-is
+}
+
 const clinikoHeaders = {
   'Authorization': 'Basic ' + Buffer.from(CLINIKO_KEY + ':').toString('base64'),
   'Accept': 'application/json',
@@ -102,14 +119,9 @@ function renderTemplate(text, vars) {
 }
 
 async function isAlreadyQueued(patientId, triggerKey) {
-  // Check message_queue
   const rows = await sbGet('message_queue',
     `patient_id=eq.${patientId}&trigger_key=eq.${triggerKey}&status=in.(pending,approved,sent)&select=id&limit=1`);
-  if (rows.length > 0) return true;
-  // Also check suppressions — covers skipped patients
-  const supRows = await sbGet('patient_suppressions',
-    `patient_id=eq.${patientId}&trigger_key=eq.${triggerKey}&select=patient_id&limit=1`);
-  return supRows.length > 0;
+  return rows.length > 0;
 }
 
 async function hasFutureBooking(patientId) {
@@ -359,7 +371,7 @@ async function syncPatients() {
           dob: p.date_of_birth || null,
           referral_source: p.referral_source || null,
           email: p.email || null,
-          phone: phone || null,
+          phone: toE164AU(phone) || null,
           created_at: p.created_at,
           updated_at: p.updated_at,
         };
@@ -389,7 +401,7 @@ async function syncAppointments() {
   console.log('\n── Appointment Sync ──');
   try {
     const settings = await getSettings();
-    const lastSync = settings.last_appointment_sync || '2020-01-01T00:00:00Z';
+    const lastSync = settings.last_patient_sync || '2020-01-01T00:00:00Z';
     console.log(`  Fetching appointments updated since ${lastSync}...`);
 
     // Fetch active appointments
@@ -451,13 +463,6 @@ async function syncAppointments() {
       }
       console.log(`  ✓ Synced ${rows.length} appointment(s)`);
     }
-
-    // Update appointment sync timestamp
-    await httpRequest('PATCH', `${SUPABASE_URL}/rest/v1/settings?key=eq.last_appointment_sync`,
-      Object.assign({ 'Prefer': 'return=minimal' }, supabaseHeaders),
-      { value: new Date().toISOString() });
-    console.log('  ✓ Appointment sync timestamp updated');
-
   } catch(e) {
     console.error('  Appointment sync error:', e.message);
   }
@@ -466,10 +471,6 @@ async function syncAppointments() {
 
 async function main() {
   console.log('============================================================');
-  console.log('BEP Comms — Queue Builder — ' + new Date().toISOString());
-  console.log('============================================================');
-
-  await syncPatients();
   await syncAppointments();
 
   const settings = await getSettings();
